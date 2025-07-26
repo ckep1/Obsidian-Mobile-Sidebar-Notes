@@ -1,134 +1,442 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, TFile, TextComponent, Notice, WorkspaceLeaf, debounce } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+interface NoteEntry {
+	path: string;
+	displayName: string;
+	id: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+interface MobileSidebarNotesSettings {
+	noteEntries: NoteEntry[];
+	autoOpenOnLoad: boolean;
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+const DEFAULT_SETTINGS: MobileSidebarNotesSettings = {
+	noteEntries: [],
+	autoOpenOnLoad: true
+}
+
+
+export default class MobileSidebarNotesPlugin extends Plugin {
+	settings: MobileSidebarNotesSettings;
+	private leafMap: Map<string, WorkspaceLeaf> = new Map();
+	private debounceTimer: number | null = null;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+		// Add settings tab
+		this.addSettingTab(new MobileSidebarNotesSettingTab(this.app, this));
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+		// Add commands to open each note
+		this.addCommands();
 
-		// This adds a simple command that can be triggered anywhere
+		// Add command to open new empty tab
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
+			id: 'open-new-sidebar-tab',
+			name: 'Open new sidebar tab',
 			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+				const leaf = this.app.workspace.getRightLeaf(false);
+				if (leaf) {
+					this.app.workspace.revealLeaf(leaf);
 				}
 			}
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		// Automatically open all notes on load if enabled
+		if (this.settings.autoOpenOnLoad) {
+			this.app.workspace.onLayoutReady(() => {
+				this.settings.noteEntries.forEach(entry => {
+					this.openNoteInSidebar(entry);
+				});
+			});
+		}
 	}
 
 	onunload() {
+		// Clean up leaf references
+		this.leafMap.clear();
 
+		// Clear any pending timers
+		if (this.debounceTimer) {
+			window.clearTimeout(this.debounceTimer);
+		}
+	}
+
+	async openNoteInSidebar(noteEntry: NoteEntry) {
+		try {
+			if (!noteEntry.path || !noteEntry.path.trim()) {
+				return;
+			}
+
+			const file = this.app.vault.getAbstractFileByPath(noteEntry.path);
+			if (!(file instanceof TFile)) {
+				return;
+			}
+
+			// Check if this file is already open in the right sidebar
+			const leaves = this.app.workspace.getLeavesOfType('markdown');
+			const existingLeaf = leaves.find(leaf =>
+				leaf.view.getState()?.file === file.path &&
+				leaf.getRoot() === this.app.workspace.rightSplit
+			);
+
+			if (existingLeaf) {
+				this.app.workspace.revealLeaf(existingLeaf);
+				this.leafMap.set(noteEntry.id, existingLeaf);
+				return;
+			}
+
+			// Create a new leaf in the right sidebar
+			const leaf = this.app.workspace.getRightLeaf(false);
+			if (leaf) {
+				await leaf.openFile(file);
+				// Store the leaf reference for this entry
+				this.leafMap.set(noteEntry.id, leaf);
+			}
+		} catch (error) {
+			console.error('Error opening note in sidebar:', error);
+			new Notice(`Failed to open note: ${error.message}`);
+		}
+	}
+
+	addCommands() {
+		this.settings.noteEntries.forEach(noteEntry => {
+			this.addCommand({
+				id: `open-${noteEntry.id}`,
+				name: `Open ${noteEntry.displayName}`,
+				callback: () => {
+					this.openNoteInSidebar(noteEntry);
+				}
+			});
+		});
+	}
+
+
+	async refreshViews() {
+		// Debounce refresh to prevent rapid successive calls
+		if (this.debounceTimer) {
+			window.clearTimeout(this.debounceTimer);
+		}
+
+		this.debounceTimer = window.setTimeout(async () => {
+			// Close existing sidebar notes
+			this.leafMap.forEach((leaf) => {
+				if (leaf) {
+					leaf.detach();
+				}
+			});
+			this.leafMap.clear();
+
+			// Re-add commands and open notes
+			this.addCommands();
+
+			// Open notes sequentially to avoid race conditions
+			for (const entry of this.settings.noteEntries) {
+				await this.openNoteInSidebar(entry);
+			}
+		}, 300);
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		try {
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		} catch (error) {
+			console.error('Failed to load settings:', error);
+			this.settings = DEFAULT_SETTINGS;
+			new Notice('Failed to load settings, using defaults');
+		}
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		try {
+			await this.saveData(this.settings);
+			await this.refreshViews();
+		} catch (error) {
+			console.error('Failed to save settings:', error);
+			new Notice('Failed to save settings');
+		}
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+class MobileSidebarNotesSettingTab extends PluginSettingTab {
+	plugin: MobileSidebarNotesPlugin;
+	private currentSuggestionEl: HTMLElement | null = null;
+	private suggestionClickInProgress = false;
+	private debouncedGetSuggestions: (value: string, inputEl: HTMLElement, textComponent: TextComponent, entry: NoteEntry) => void;
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: MobileSidebarNotesPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+
+		// Create debounced suggestion function
+		this.debouncedGetSuggestions = debounce(
+			(value: string, inputEl: HTMLElement, textComponent: TextComponent, entry: NoteEntry) => {
+				if (!this.suggestionClickInProgress && document.activeElement === inputEl) {
+					const suggestions = this.getPathSuggestions(value);
+					if (suggestions.length > 0) {
+						this.showSuggestions(inputEl, suggestions, textComponent, entry);
+					}
+				}
+			},
+			300,
+			true
+		);
 	}
 
 	display(): void {
-		const {containerEl} = this;
-
+		const { containerEl } = this;
 		containerEl.empty();
 
+		containerEl.createEl('h2', { text: 'Mobile Sidebar Notes' });
+
+		// Global settings
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+			.setName('Auto-open on load')
+			.setDesc('Automatically open all configured notes when Obsidian starts')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autoOpenOnLoad)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.autoOpenOnLoad = value;
 					await this.plugin.saveSettings();
 				}));
+
+		containerEl.createEl('h3', { text: 'Configured Notes' });
+
+		const tipEl = containerEl.createDiv({ cls: 'setting-item-description' });
+		tipEl.innerHTML = `
+			<strong>💡 Tip:</strong> To close or manage sidebar tabs, navigate to the specific tab in the sidebar, 
+			then press and hold on the tab title in the sidebar dropdown menu. This will show options to close, 
+			pin, rename, or perform other tab-specific actions.
+		`;
+		tipEl.style.marginBottom = '1rem';
+		tipEl.style.padding = '0.75rem';
+		tipEl.style.backgroundColor = 'var(--background-secondary)';
+		tipEl.style.borderRadius = '4px';
+		tipEl.style.fontSize = '0.9em';
+
+		// Add new note entry button
+		new Setting(containerEl)
+			.setName('Add new note')
+			.setDesc('Add a note to the mobile sidebar')
+			.addButton(button => button
+				.setButtonText('Add Note')
+				.onClick(async () => {
+					const newEntry: NoteEntry = {
+						path: '',
+						displayName: 'New Note',
+						id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+					};
+					this.plugin.settings.noteEntries.push(newEntry);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		// Display existing note entries
+		this.plugin.settings.noteEntries.forEach((entry, index) => {
+			const setting = new Setting(containerEl)
+				.setName(`Note ${index + 1}`)
+				.addText(text => text
+					.setPlaceholder('Display name')
+					.setValue(entry.displayName)
+					.onChange(async (value) => {
+						entry.displayName = value;
+						await this.plugin.saveSettings();
+					}))
+				.addText(text => {
+					text.setPlaceholder('Note path (e.g., folder/note.md)')
+						.setValue(entry.path)
+						.onChange(async (value) => {
+							entry.path = value;
+							this.validatePath(text, value, false); // Don't show toast on change
+							await this.plugin.saveSettings();
+						});
+
+					// Add autocomplete functionality
+					this.addPathAutocomplete(text, entry);
+
+					// Initial validation
+					this.validatePath(text, entry.path, false);
+
+					return text;
+				})
+				.addButton(button => button
+					.setButtonText('Remove')
+					.setWarning()
+					.onClick(async () => {
+						this.plugin.settings.noteEntries.splice(index, 1);
+						await this.plugin.saveSettings();
+						this.display();
+					}));
+
+			setting.settingEl.addClass('mobile-sidebar-setting-item');
+		});
 	}
+
+	validatePath(textComponent: TextComponent, path: string, showToast = true) {
+		const inputEl = textComponent.inputEl;
+		inputEl.removeClass('valid', 'invalid');
+
+		if (!path.trim()) {
+			inputEl.title = '';
+			if (showToast) {
+				new Notice('Please specify a note path');
+			}
+			return false;
+		}
+
+		// Sanitize path
+		const sanitizedPath = path.trim().replace(/\\/g, '/');
+		const file = this.app.vault.getAbstractFileByPath(sanitizedPath);
+
+		if (file instanceof TFile) {
+			inputEl.addClass('mobile-sidebar-path-input', 'valid');
+			inputEl.title = 'Valid note path';
+			return true;
+		} else {
+			inputEl.addClass('mobile-sidebar-path-input', 'invalid');
+			inputEl.title = 'Note not found';
+			if (showToast) {
+				new Notice(`Note not found: ${path}`);
+			}
+			return false;
+		}
+	}
+
+	addPathAutocomplete(textComponent: TextComponent, entry: NoteEntry) {
+		const inputEl = textComponent.inputEl;
+		inputEl.addClass('mobile-sidebar-path-input');
+
+		inputEl.addEventListener('input', () => {
+			// Don't show suggestions if we're in the middle of a click
+			if (this.suggestionClickInProgress) return;
+
+			this.hideSuggestions();
+
+			const value = inputEl.value.trim();
+			if (value.length < 2) return;
+
+			this.debouncedGetSuggestions(value, inputEl, textComponent, entry);
+		});
+
+		inputEl.addEventListener('blur', () => {
+			// Don't hide immediately if clicking on suggestion
+			if (!this.suggestionClickInProgress) {
+				setTimeout(() => {
+					if (!this.suggestionClickInProgress) {
+						this.hideSuggestions();
+					}
+				}, 200);
+			}
+		});
+
+		// Handle keyboard navigation
+		inputEl.addEventListener('keydown', async (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				const isValid = this.validatePath(textComponent, inputEl.value, true);
+				if (isValid) {
+					// Open the note in sidebar when Enter is pressed on valid path
+					await this.plugin.openNoteInSidebar(entry);
+				}
+			} else if (e.key === 'Escape' && this.currentSuggestionEl) {
+				e.preventDefault();
+				this.hideSuggestions();
+			}
+		});
+	}
+
+	getPathSuggestions(query: string): string[] {
+		const files = this.app.vault.getMarkdownFiles();
+		return files
+			.map(file => file.path)
+			.filter(path => path.toLowerCase().includes(query.toLowerCase()))
+			.slice(0, 5);
+	}
+
+	showSuggestions(inputEl: HTMLElement, suggestions: string[], textComponent: TextComponent, entry: NoteEntry) {
+		this.hideSuggestions();
+
+		const suggestionEl = document.createElement('div');
+		suggestionEl.addClass('mobile-sidebar-suggestion-container');
+
+		// Set dynamic width independent of input size
+		const windowWidth = window.innerWidth;
+		const desiredWidth = Math.min(windowWidth * 0.85, 400);
+		suggestionEl.style.width = `${desiredWidth}px`;
+
+		suggestions.forEach(suggestion => {
+			const item = suggestionEl.createDiv();
+			item.addClass('mobile-sidebar-suggestion-item');
+			item.textContent = suggestion;
+
+			item.addEventListener('mousedown', (e) => {
+				e.preventDefault(); // Prevent blur
+				this.suggestionClickInProgress = true;
+			});
+
+			item.addEventListener('click', async () => {
+				// Update the entry directly
+				entry.path = suggestion;
+
+				// Set value in UI
+				textComponent.setValue(suggestion);
+
+				// Save settings to persist the change
+				await this.plugin.saveSettings();
+
+				this.hideSuggestions();
+				this.suggestionClickInProgress = false;
+				// Trigger validation without showing suggestions
+				this.validatePath(textComponent, suggestion, false);
+				// Remove focus from input
+				inputEl.blur();
+			});
+		});
+
+		document.body.appendChild(suggestionEl);
+		const rect = inputEl.getBoundingClientRect();
+		const viewportWidth = window.innerWidth;
+		const suggestionWidth = desiredWidth;
+
+		// Calculate available space below and above the input
+		const spaceBelow = window.innerHeight - rect.bottom;
+		const spaceAbove = rect.top;
+		const suggestionHeight = Math.min(200, suggestions.length * 40); // Approximate height
+
+		// Position vertically - below if there's enough space, otherwise position above
+		if (spaceBelow >= suggestionHeight || spaceBelow >= spaceAbove) {
+			// Position below
+			suggestionEl.style.top = `${rect.bottom + 2}px`;
+		} else {
+			// Position above
+			suggestionEl.style.bottom = `${window.innerHeight - rect.top + 2}px`;
+			suggestionEl.style.top = 'auto';
+		}
+
+		// Position horizontally - ensure it fits within viewport
+		let leftPosition = rect.left;
+
+		// If suggestion box would extend past right edge, adjust position
+		if (leftPosition + suggestionWidth > viewportWidth) {
+			leftPosition = viewportWidth - suggestionWidth - 10; // 10px margin from edge
+		}
+
+		// Ensure it doesn't go past left edge
+		if (leftPosition < 10) {
+			leftPosition = 10; // 10px margin from left edge
+		}
+
+		suggestionEl.style.left = `${leftPosition}px`;
+
+		this.currentSuggestionEl = suggestionEl;
+	}
+
+	hideSuggestions() {
+		if (this.currentSuggestionEl) {
+			this.currentSuggestionEl.remove();
+			this.currentSuggestionEl = null;
+		}
+	}
+
 }

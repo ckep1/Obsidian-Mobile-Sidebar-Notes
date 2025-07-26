@@ -1,8 +1,50 @@
-/*
+/* Mobile Sidebar Notes Plugin Styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.mobile-sidebar-suggestion-container {
+	position: fixed;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	overflow-y: auto;
+	max-height: 200px;
+	z-index: 1000;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
 
-If your plugin does not need CSS, delete this file.
+.mobile-sidebar-suggestion-item {
+	padding: 8px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+	transition: background-color 0.15s ease;
+}
 
-*/
+.mobile-sidebar-suggestion-item:hover,
+.mobile-sidebar-suggestion-item:focus {
+	background-color: var(--background-modifier-hover);
+	outline: none;
+}
+
+.mobile-sidebar-suggestion-item:last-child {
+	border-bottom: none;
+}
+
+.mobile-sidebar-path-input {
+	width: 100%;
+}
+
+.mobile-sidebar-path-input.valid {
+	border-color: var(--interactive-success);
+	transition: border-color 0.15s ease;
+}
+
+.mobile-sidebar-path-input.invalid {
+	border-color: var(--interactive-error);
+	transition: border-color 0.15s ease;
+}
+
+.mobile-sidebar-setting-item {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	margin-bottom: 1rem;
+}
