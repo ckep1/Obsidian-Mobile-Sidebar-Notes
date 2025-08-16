@@ -1,6 +1,6 @@
 # Mobile Sidebar Notes
 
-Open notes or new tabs in the sidebar on Obsidian mobile. Maintains full editor functionality, works with all editor types including canvases!
+Open notes or new tabs in the sidebar in the mobile app. Maintains full editor functionality, works with all editor types including canvases!
 While this plugin works as expected on desktop for loading notes in the sidebar and adds commands, this functionality is already built-in on desktop.
 
 ## Features
