@@ -293,7 +293,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 				.onClick(async () => {
 					const newEntry: NoteEntry = {
 						path: '',
-						displayName: 'Title',
+						displayName: '',
 						id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
 					};
 					this.plugin.settings.noteEntries.push(newEntry);
