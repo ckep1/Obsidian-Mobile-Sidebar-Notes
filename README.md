@@ -5,10 +5,9 @@ While this plugin works as expected on desktop for loading notes in the sidebar 
 
 ## Features
 
-- Pin specific notes to auto-open in sidebar tabs
-- Automatic tab population on startup (configurable)
-- Smart duplicate prevention - won't open the same note twice
 - Command to open new empty sidebar tabs for browsing
+- Set specific notes as commands for easy sidebar access (compatible with hotkeys)
+- Smart duplicate prevention - won't open the same note twice
 - Autocomplete path suggestions when configuring notes
 
 ## Installation
@@ -20,9 +19,9 @@ While this plugin works as expected on desktop for loading notes in the sidebar 
 ## Usage
 
 1. Go to Settings → Mobile Sidebar Note
-2. Click "Add Note" to configure a sidebar note
+2. Click "Add Command" to configure a sidebar note command
 3. Enter a display name and note path (autocomplete helps find notes)
-4. Notes automatically open in sidebar tabs on startup
+4. Use commands or "Open new sidebar tab" to access notes
 
 **or simply:**
 
@@ -31,18 +30,27 @@ While this plugin works as expected on desktop for loading notes in the sidebar 
 
 ### Commands
 
-- **Open [Note Name]**: Opens configured notes in sidebar
+- **Open [Note Name] in Sidebar**: Opens configured notes in sidebar
 - **Open new sidebar tab**: Creates empty sidebar tab for browsing
 
 ## Settings
 
-- **Auto-open on load**: Toggle automatic opening of configured notes when Obsidian starts
-- **Configured Notes**: Add/remove notes to pin in sidebar tabs and add as commands
+### General
+
+- **Auto-pin tabs**: Automatically pin notes opened in the sidebar to open links in new tabs (enabled by default)
+
+### Commands
+
+- **Commands**: Add/remove notes to create commands for sidebar access
 
 ## Tips
 
 - Within the sidebar, press and hold on the dropdown of the note for options such as closing, pinning and renaming.
-- Tabs tend to persist between sessions / after open unless closed even without the auto-loading enabled.
-- Duplicate tabs are prevented, auto load will reopen the desired tabs and prevent copies.
+- Tabs tend to persist between sessions / after opening unless manually closed.
+- Duplicate tabs are prevented when opening the same note multiple times.
 - This is a standard editor tab, so most core note functionality should be preserved.
 - Any notes opened will continue to work as normal even if the plugin is disabled.
+
+# Contributing
+
+Feel free to make suggestions and issues/PRs, though please consider that I'd like to keep this plugin simple and focused.

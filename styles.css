@@ -33,12 +33,11 @@
 }
 
 .mobile-sidebar-path-input.valid {
-	border-color: var(--interactive-success);
 	transition: border-color 0.15s ease;
 }
 
 .mobile-sidebar-path-input.invalid {
-	border-color: var(--interactive-error);
+	color: var(--text-error) !important;
 	transition: border-color 0.15s ease;
 }
 

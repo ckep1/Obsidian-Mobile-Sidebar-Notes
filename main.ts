@@ -8,12 +8,14 @@ interface NoteEntry {
 
 interface MobileSidebarNotesSettings {
 	noteEntries: NoteEntry[];
-	autoOpenOnLoad: boolean;
+	tipDismissed: boolean;
+	autoPinTabs: boolean;
 }
 
 const DEFAULT_SETTINGS: MobileSidebarNotesSettings = {
 	noteEntries: [],
-	autoOpenOnLoad: true
+	tipDismissed: false,
+	autoPinTabs: true
 }
 
 
@@ -43,14 +45,13 @@ export default class MobileSidebarNotesPlugin extends Plugin {
 			}
 		});
 
-		// Automatically open all notes on load if enabled
-		if (this.settings.autoOpenOnLoad) {
-			this.app.workspace.onLayoutReady(() => {
-				this.settings.noteEntries.forEach(entry => {
-					this.openNoteInSidebar(entry);
-				});
-			});
-		}
+		// Listen for leaf changes to clean up our leaf map
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				this.cleanupClosedLeaves();
+			})
+		);
+
 	}
 
 	onunload() {
@@ -93,6 +94,11 @@ export default class MobileSidebarNotesPlugin extends Plugin {
 				await leaf.openFile(file);
 				// Store the leaf reference for this entry
 				this.leafMap.set(noteEntry.id, leaf);
+
+				// Auto-pin the tab if setting is enabled
+				if (this.settings.autoPinTabs) {
+					leaf.setPinned(true);
+				}
 			}
 		} catch (error) {
 			console.error('Error opening note in sidebar:', error);
@@ -100,11 +106,44 @@ export default class MobileSidebarNotesPlugin extends Plugin {
 		}
 	}
 
+	cleanupClosedLeaves() {
+		// Remove closed leaves from our tracking map
+		const activeLeaves = this.app.workspace.getLeavesOfType('markdown')
+			.filter(leaf => leaf.getRoot() === this.app.workspace.rightSplit);
+
+		// Find entries whose leaves no longer exist
+		const toRemove: string[] = [];
+		this.leafMap.forEach((leaf, id) => {
+			if (!activeLeaves.includes(leaf)) {
+				toRemove.push(id);
+			}
+		});
+
+		// Remove stale references
+		toRemove.forEach(id => {
+			this.leafMap.delete(id);
+		});
+	}
+
 	addCommands() {
 		this.settings.noteEntries.forEach(noteEntry => {
+			// Only register command if path is not empty and file exists
+			if (!noteEntry.path || !noteEntry.path.trim()) {
+				return;
+			}
+
+			// Check if file exists
+			const sanitizedPath = noteEntry.path.trim().replace(/\\/g, '/');
+			const file = this.app.vault.getAbstractFileByPath(sanitizedPath);
+			if (!(file instanceof TFile)) {
+				return;
+			}
+
+			// Use displayName if provided, otherwise use file path
+			const title = noteEntry.displayName.trim() || noteEntry.path || 'Untitled';
 			this.addCommand({
 				id: `open-${noteEntry.id}`,
-				name: `Open ${noteEntry.displayName}`,
+				name: `Open ${title} in Sidebar`,
 				callback: () => {
 					this.openNoteInSidebar(noteEntry);
 				}
@@ -190,26 +229,62 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'Mobile Sidebar Notes' });
 
-		// Global settings
+		containerEl.createEl('h3', { text: 'General' });
+
+		// Auto-pin tabs setting
 		new Setting(containerEl)
-			.setName('Auto-open on load')
-			.setDesc('Automatically open all configured notes when Obsidian starts')
+			.setName('Auto-pin tabs')
+			.setDesc('Automatically pin notes opened in the sidebar to open links in new tabs')
 			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoOpenOnLoad)
+				.setValue(this.plugin.settings.autoPinTabs)
 				.onChange(async (value) => {
-					this.plugin.settings.autoOpenOnLoad = value;
+					this.plugin.settings.autoPinTabs = value;
 					await this.plugin.saveSettings();
 				}));
 
-		containerEl.createEl('h3', { text: 'Configured Notes' });
+		containerEl.createEl('h3', { text: 'Commands' });
 
-		const tipEl = containerEl.createDiv({ cls: 'setting-item-description' });
-		tipEl.innerHTML = `📌 <strong>Tip:</strong> To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.`;
-		tipEl.style.marginBottom = '1rem';
-		tipEl.style.padding = '0.75rem';
-		tipEl.style.backgroundColor = 'var(--background-secondary)';
-		tipEl.style.borderRadius = '4px';
-		tipEl.style.fontSize = '0.9em';
+		// Show tip if not dismissed
+		if (!this.plugin.settings.tipDismissed) {
+			const tipEl = containerEl.createDiv({ cls: 'setting-item-description' });
+			tipEl.style.marginBottom = '1rem';
+			tipEl.style.padding = '0.75rem';
+			tipEl.style.backgroundColor = 'var(--background-secondary)';
+			tipEl.style.borderRadius = '4px';
+			tipEl.style.fontSize = '0.9em';
+			tipEl.style.position = 'relative';
+
+			const tipContent = tipEl.createDiv();
+			tipContent.innerHTML = `📌 <strong>Tip:</strong> To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.`;
+
+			const dismissBtn = tipEl.createEl('button', {
+				cls: 'tip-dismiss-btn',
+				text: '×'
+			});
+			dismissBtn.style.position = 'absolute';
+			dismissBtn.style.top = '0.5rem';
+			dismissBtn.style.right = '0.5rem';
+			dismissBtn.style.border = 'none';
+			dismissBtn.style.background = 'none';
+			dismissBtn.style.fontSize = '1.2em';
+			dismissBtn.style.cursor = 'pointer';
+			dismissBtn.style.opacity = '0.7';
+			dismissBtn.title = 'Dismiss tip';
+
+			dismissBtn.addEventListener('click', async () => {
+				this.plugin.settings.tipDismissed = true;
+				await this.plugin.saveSettings();
+				this.display();
+			});
+
+			dismissBtn.addEventListener('mouseenter', () => {
+				dismissBtn.style.opacity = '1';
+			});
+
+			dismissBtn.addEventListener('mouseleave', () => {
+				dismissBtn.style.opacity = '0.7';
+			});
+		}
 
 		// Add new note entry button
 		new Setting(containerEl)
@@ -233,7 +308,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			const setting = new Setting(containerEl)
 				.setName(`Note ${index + 1}`)
 				.addText(text => text
-					.setPlaceholder('Note title in command palette')
+					.setPlaceholder('Title (in command)')
 					.setValue(entry.displayName)
 					.onChange(async (value) => {
 						entry.displayName = value;
@@ -274,7 +349,8 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 		inputEl.removeClass('valid', 'invalid');
 
 		if (!path.trim()) {
-			inputEl.title = '';
+			inputEl.addClass('mobile-sidebar-path-input', 'invalid');
+			inputEl.title = 'Path is required to register command';
 			if (showToast) {
 				new Notice('Please specify a note path');
 			}
@@ -291,7 +367,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			return true;
 		} else {
 			inputEl.addClass('mobile-sidebar-path-input', 'invalid');
-			inputEl.title = 'Note not found';
+			inputEl.title = 'Note not found - command will not be registered';
 			if (showToast) {
 				new Notice(`Note not found: ${path}`);
 			}
