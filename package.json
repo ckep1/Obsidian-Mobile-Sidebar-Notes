@@ -1,7 +1,7 @@
 {
 	"name": "mobile-sidebar-notes",
 	"version": "1.0.0",
-	"description": "Open notes / new tabs in the sidebar on Obsidian mobile.",
+	"description": "Open notes & new tabs in the sidebar on Obsidian mobile.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

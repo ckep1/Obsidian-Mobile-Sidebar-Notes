@@ -227,10 +227,6 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'Mobile Sidebar Notes' });
-
-		containerEl.createEl('h3', { text: 'General' });
-
 		// Auto-pin tabs setting
 		new Setting(containerEl)
 			.setName('Auto-pin tabs')
@@ -255,7 +251,9 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			tipEl.style.position = 'relative';
 
 			const tipContent = tipEl.createDiv();
-			tipContent.innerHTML = `📌 <strong>Tip:</strong> To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.`;
+			tipContent.createSpan({ text: '📌 ' });
+			tipContent.createEl('strong', { text: 'Tip:' });
+			tipContent.createSpan({ text: ' To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.' });
 
 			const dismissBtn = tipEl.createEl('button', {
 				cls: 'tip-dismiss-btn',
