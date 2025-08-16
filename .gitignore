@@ -1,9 +1,19 @@
 # vscode
 .vscode 
 
+# Cursor
+.cursor
+
+# Claude
+CLAUDE.md
+.claude
+
 # Intellij
 *.iml
 .idea
+
+# package-lock.json
+package-lock.json
 
 # npm
 node_modules

@@ -204,11 +204,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 		containerEl.createEl('h3', { text: 'Configured Notes' });
 
 		const tipEl = containerEl.createDiv({ cls: 'setting-item-description' });
-		tipEl.innerHTML = `
-			<strong>💡 Tip:</strong> To close or manage sidebar tabs, navigate to the specific tab in the sidebar, 
-			then press and hold on the tab title in the sidebar dropdown menu. This will show options to close, 
-			pin, rename, or perform other tab-specific actions.
-		`;
+		tipEl.innerHTML = `📌 <strong>Tip:</strong> To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.`;
 		tipEl.style.marginBottom = '1rem';
 		tipEl.style.padding = '0.75rem';
 		tipEl.style.backgroundColor = 'var(--background-secondary)';
@@ -217,14 +213,14 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 
 		// Add new note entry button
 		new Setting(containerEl)
-			.setName('Add new note')
-			.setDesc('Add a note to the mobile sidebar')
+			.setName('Add specific notes as a command')
+			.setDesc('Registers a command to open a specific note in the sidebar in the command palette or as a hotkey.')
 			.addButton(button => button
-				.setButtonText('Add Note')
+				.setButtonText('Add Command')
 				.onClick(async () => {
 					const newEntry: NoteEntry = {
 						path: '',
-						displayName: 'New Note',
+						displayName: 'Title',
 						id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
 					};
 					this.plugin.settings.noteEntries.push(newEntry);
@@ -237,7 +233,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			const setting = new Setting(containerEl)
 				.setName(`Note ${index + 1}`)
 				.addText(text => text
-					.setPlaceholder('Display name')
+					.setPlaceholder('Note title in command palette')
 					.setValue(entry.displayName)
 					.onChange(async (value) => {
 						entry.displayName = value;
