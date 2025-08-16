@@ -3,7 +3,7 @@
 	"name": "Mobile Sidebar Notes",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Add notes to the mobile sidebar with custom names and easy access.",
+	"description": "Open notes / new tabs in the sidebar on Obsidian mobile.",
 	"author": "Chris Kephart",
 	"authorUrl": "https://github.com/ckep1",
 	"isDesktopOnly": false
