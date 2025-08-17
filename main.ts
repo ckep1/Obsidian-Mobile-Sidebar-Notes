@@ -242,13 +242,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 
 		// Show tip if not dismissed
 		if (!this.plugin.settings.tipDismissed) {
-			const tipEl = containerEl.createDiv({ cls: 'setting-item-description' });
-			tipEl.style.marginBottom = '1rem';
-			tipEl.style.padding = '0.75rem';
-			tipEl.style.backgroundColor = 'var(--background-secondary)';
-			tipEl.style.borderRadius = '4px';
-			tipEl.style.fontSize = '0.9em';
-			tipEl.style.position = 'relative';
+			const tipEl = containerEl.createDiv({ cls: 'setting-item-description mobile-sidebar-tip' });
 
 			const tipContent = tipEl.createDiv();
 			tipContent.createSpan({ text: '📌 ' });
@@ -256,17 +250,9 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			tipContent.createSpan({ text: ' To close/pin/rename/manage sidebar tabs, press and hold the note title in the sidebar source dropdown.' });
 
 			const dismissBtn = tipEl.createEl('button', {
-				cls: 'tip-dismiss-btn',
+				cls: 'mobile-sidebar-tip-dismiss-btn',
 				text: '×'
 			});
-			dismissBtn.style.position = 'absolute';
-			dismissBtn.style.top = '0.5rem';
-			dismissBtn.style.right = '0.5rem';
-			dismissBtn.style.border = 'none';
-			dismissBtn.style.background = 'none';
-			dismissBtn.style.fontSize = '1.2em';
-			dismissBtn.style.cursor = 'pointer';
-			dismissBtn.style.opacity = '0.7';
 			dismissBtn.title = 'Dismiss tip';
 
 			dismissBtn.addEventListener('click', async () => {
@@ -275,13 +261,6 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 				this.display();
 			});
 
-			dismissBtn.addEventListener('mouseenter', () => {
-				dismissBtn.style.opacity = '1';
-			});
-
-			dismissBtn.addEventListener('mouseleave', () => {
-				dismissBtn.style.opacity = '0.7';
-			});
 		}
 
 		// Add new note entry button
@@ -430,10 +409,9 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 		const suggestionEl = document.createElement('div');
 		suggestionEl.addClass('mobile-sidebar-suggestion-container');
 
-		// Set dynamic width independent of input size
-		const windowWidth = window.innerWidth;
-		const desiredWidth = Math.min(windowWidth * 0.85, 400);
-		suggestionEl.style.width = `${desiredWidth}px`;
+		// Set standard autocomplete width (following UX best practices)
+		const desiredWidth = Math.min(320, window.innerWidth - 20);
+		suggestionEl.style.setProperty('--suggestion-width', `${desiredWidth}px`);
 
 		suggestions.forEach(suggestion => {
 			const item = suggestionEl.createDiv();
@@ -477,11 +455,12 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 		// Position vertically - below if there's enough space, otherwise position above
 		if (spaceBelow >= suggestionHeight || spaceBelow >= spaceAbove) {
 			// Position below
-			suggestionEl.style.top = `${rect.bottom + 2}px`;
+			suggestionEl.style.setProperty('--suggestion-top', `${rect.bottom + 2}px`);
+			suggestionEl.style.setProperty('--suggestion-bottom', 'auto');
 		} else {
 			// Position above
-			suggestionEl.style.bottom = `${window.innerHeight - rect.top + 2}px`;
-			suggestionEl.style.top = 'auto';
+			suggestionEl.style.setProperty('--suggestion-bottom', `${window.innerHeight - rect.top + 2}px`);
+			suggestionEl.style.setProperty('--suggestion-top', 'auto');
 		}
 
 		// Position horizontally - ensure it fits within viewport
@@ -497,7 +476,7 @@ class MobileSidebarNotesSettingTab extends PluginSettingTab {
 			leftPosition = 10; // 10px margin from left edge
 		}
 
-		suggestionEl.style.left = `${leftPosition}px`;
+		suggestionEl.style.setProperty('--suggestion-left', `${leftPosition}px`);
 
 		this.currentSuggestionEl = suggestionEl;
 	}
